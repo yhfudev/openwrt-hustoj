@@ -40,27 +40,28 @@ define Package/hustoj
   SUBMENU:=Web Servers/Proxies
   TITLE:=hustoj for web server
   URL:=https://github.com/zhblue/hustoj.git
-  DEPENDS:= +libmysqlclient
+  DEPENDS:= +libstdcpp +libmysqlclient
   MENU:=0
 
   MAKE_PATH=trunk/core
   CONFIGURE_PATH=trunk/core
   CONFIGURE_ARGS+= --disable-debug
   TARGET_LDFLAGS += "-L$(STAGING_DIR)/usr/lib/mysql/"
-
 endef
 
 define Package/hustoj/description
   HUST Online Judge
 endef
 
-
 define Package/hustoj/install
-	$(INSTALL_DIR) $(1)/usr/share/hustoj
-	$(INSTALL_DIR) $(1)/usr/share/webapps/hustoj
+	$(INSTALL_DIR) $(1)/usr/share/
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_DIR) $(1)/usr/share/webapps/
+	#$(INSTALL_DIR) $(1)/etc/init.d
+	rm -rf "$(1)/usr/share/hustoj/"
+	rm -rf "$(1)/usr/share/webapps/hustoj/"
 	$(CP) -r "$$(PKG_BUILD_DIR)/trunk/install/" "$(1)/usr/share/hustoj"
+	cd $(PKG_BUILD_DIR)/trunk/core/ && make DESTDIR=$(1) install
 	#$(INSTALL_BIN) $(PKG_BUILD_DIR)/trunk/core/judged/judged $(1)/usr/bin/
 	#$(INSTALL_BIN) $(PKG_BUILD_DIR)/trunk/judge_client/judge_client $(1)/usr/bin/
 	#$(INSTALL_BIN) $(PKG_BUILD_DIR)/trunk/core/sim/sim_2_77/sim_c.exe $(1)/usr/bin/sim_c
