@@ -1,0 +1,520 @@
+diff -Nru hustoj-r3120.58b04b80/trunk/core/autoclean.sh hustoj-r3120.58b04b80-changed/trunk/core/autoclean.sh
+--- hustoj-r3120.58b04b80/trunk/core/autoclean.sh	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/autoclean.sh	2017-01-26 10:45:10.000000000 -0500
+@@ -0,0 +1,18 @@
++#!/bin/sh
++
++chmod 755 $0 autogen.sh config.guess config.rpath config.status config.sub configure depcomp install-sh missing
++
++make clean
++make distclean
++
++rm -f *.o
++
++rm -f config.log
++rm -f config.status
++rm -f config.h
++rm -f Makefile
++rm -rf ./autom4te.cache/
++rm -f gmon.out
++
++#rm -f ./src/Makefile.in
++#rm -f ./Makefile.in
+diff -Nru hustoj-r3120.58b04b80/trunk/core/autogen.sh hustoj-r3120.58b04b80-changed/trunk/core/autogen.sh
+--- hustoj-r3120.58b04b80/trunk/core/autogen.sh	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/autogen.sh	2017-11-11 14:36:50.759529830 -0500
+@@ -0,0 +1,46 @@
++#!/bin/sh
++
++./autoclean.sh
++
++rm -f configure
++
++rm -f Makefile.in
++
++rm -f config.guess
++rm -f config.sub
++rm -f install-sh
++rm -f missing
++rm -f depcomp
++
++if [ 0 = 1 ]; then
++autoscan
++else
++
++touch NEWS
++touch README
++touch AUTHORS
++touch ChangeLog
++touch config.h.in
++touch install-sh
++
++libtoolize --force --copy --install --automake
++aclocal
++automake -a -c
++autoconf
++# run twice to get rid of 'ltmain.sh not found'
++autoreconf -f -i -Wall,no-obsolete
++autoreconf -f -i -Wall,no-obsolete
++
++#./configure
++
++./configure --enable-debug
++
++#make clean
++#make ChangeLog
++
++#make
++#make check
++#make -C doc/latex/
++#make dist-gzip
++
++fi
+diff -Nru hustoj-r3120.58b04b80/trunk/core/configure.ac hustoj-r3120.58b04b80-changed/trunk/core/configure.ac
+--- hustoj-r3120.58b04b80/trunk/core/configure.ac	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/configure.ac	2017-11-11 15:59:37.570035016 -0500
+@@ -0,0 +1,70 @@
++#                                               -*- Autoconf -*-
++# Process this file with autoconf to produce a configure script.
++
++AC_PREREQ([2.69])
++AC_INIT([hustojcore], [VERSION], [BUG-REPORT-ADDRESS])
++AC_CONFIG_SRCDIR([judged/judged.cc])
++AC_CONFIG_HEADERS([config.h])
++AM_INIT_AUTOMAKE(-Wall)
++
++#magic for conditional check in Makefile:
++MK=''; AC_SUBST(MK)
++SED=sed
++
++# Checks for programs.
++AC_PROG_AWK
++AC_PROG_CXX
++AC_PROG_CC
++AC_PROG_LEX
++AC_PROG_INSTALL
++AC_PROG_LN_S
++AC_PROG_MAKE_SET
++
++# debug
++AC_ARG_ENABLE([debug],
++	AS_HELP_STRING([--enable-debug],[Compile the debug version (default: disabled)]),
++	[enable_debug=$enableval],
++	[enable_debug=no])
++AM_CONDITIONAL([DEBUG], [test $enable_debug = "yes"])
++if test "x$enable_debug" = "xyes"; then
++  changequote({,})
++  CFLAGS=`echo "$CFLAGS" | $SED -e 's/-O[0-9s]*//g'`
++  CXXFLAGS=`echo "$CXXFLAGS" | $SED -e 's/-O[0-9s]*//g'`
++  CFLAGS=`echo "$CFLAGS" | $SED -e 's/-g//g'`
++  CXXFLAGS=`echo "$CXXFLAGS" | $SED -e 's/-g//g'`
++  changequote([,])
++  dnl add -O0 only if GCC or ICC is used
++  if test "$GCC" = "yes" || test "$ICC" = "yes"; then
++    CFLAGS="$CFLAGS -g -O0 -Wall"
++    CXXFLAGS="$CXXFLAGS -g -O0 -Wall"
++  fi
++fi
++
++# Checks for libraries.
++# FIXME: Replace `main' with a function in `-lmysqlclient':
++AC_CHECK_LIB([mysqlclient], [mysql_real_query])
++
++# Checks for header files.
++AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h sys/time.h syslog.h unistd.h])
++
++# Checks for typedefs, structures, and compiler characteristics.
++AC_CHECK_HEADER_STDBOOL
++AC_TYPE_PID_T
++AC_TYPE_SIZE_T
++AC_TYPE_UINT16_T
++AC_TYPE_UINT32_T
++AC_TYPE_UINT64_T
++AC_TYPE_UINT8_T
++
++# Checks for library functions.
++AC_FUNC_FORK
++AC_FUNC_MALLOC
++AC_FUNC_REALLOC
++AC_CHECK_FUNCS([alarm dup2 ftruncate memset strerror])
++
++AC_CONFIG_FILES([Makefile
++                 judge_client/Makefile
++                 judged/Makefile
++                 sim/sim_2_77/Makefile
++    ])
++AC_OUTPUT
+diff -Nru hustoj-r3120.58b04b80/trunk/core/judge_client/judge_client.cc hustoj-r3120.58b04b80-changed/trunk/core/judge_client/judge_client.cc
+--- hustoj-r3120.58b04b80/trunk/core/judge_client/judge_client.cc	2017-11-09 07:40:33.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/judge_client/judge_client.cc	2017-11-11 16:22:20.580912363 -0500
+@@ -118,7 +118,10 @@
+ #else
+ #define REG_SYSCALL ARM_r7
+ #endif
+-static int DEBUG = 0;
++#ifndef DEBUG
++#define DEBUG 0
++#endif
++static int DEBUG1 = 0;
+ static char host_name[BUFFER_SIZE];
+ static char user_name[BUFFER_SIZE];
+ static char password[BUFFER_SIZE];
+@@ -2228,7 +2231,7 @@
+ 				argv[0]);
+ 		exit(1);
+ 	}
+-	DEBUG = (argc > 4);
++	DEBUG1 = (argc > 4);
+ 	record_call = (argc > 5);
+ 	if (argc > 5) {
+ 		strcpy(LANG_NAME, argv[5]);
+diff -Nru hustoj-r3120.58b04b80/trunk/core/judge_client/Makefile.am hustoj-r3120.58b04b80-changed/trunk/core/judge_client/Makefile.am
+--- hustoj-r3120.58b04b80/trunk/core/judge_client/Makefile.am	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/judge_client/Makefile.am	2017-11-11 14:40:43.596501435 -0500
+@@ -0,0 +1,62 @@
++
++AM_LDFLAGS=
++AM_CFLAGS=
++AM_CPPFLAGS=
++EXTRA_DIST=
++
++if DEBUG
++# use "valgrind --tool=memcheck --leak-check=yes" to check memory leak, MemWatch will drag the program.
++DEFS+=-DDEBUG=1
++AM_CFLAGS+=-g  # -Werror -Wno-initializer-overrides # -Wall
++
++else
++AM_CFLAGS+=-O3 # -Werror -Wno-initializer-overrides # -Wall
++endif
++
++AM_CFLAGS+= \
++    -I$(top_srcdir)/src/ \
++    -I$(top_srcdir)/include/ \
++    -I$(top_builddir)/include/ \
++    $(NULL)
++
++AM_CPPFLAGS+= $(AM_CFLAGS)
++
++AM_LDFLAGS += \
++    $(NULL)
++
++DEFS+= \
++    `getconf LFS_CFLAGS` \
++    `getconf LFS64_CFLAGS` \
++    -D_GNU_SOURCE \
++    -D_FILE_OFFSET_BITS=64 \
++    -DHAVE_MMAP64=1 \
++    $(NULL)
++
++DOCUMENT_FOLDER         ?= $(datadir)/doc/@PACKAGE@/
++
++#TESTS=judge_client
++bin_PROGRAMS=judge_client
++
++judge_client_SOURCES= \
++    judge_client.cc \
++    $(NULL)
++judge_client_LDADD = -lmysqlclient
++judge_client_CFLAGS = $(AM_CFLAGS)
++judge_client_LDFLAGS = $(AM_LDFLAGS)
++
++EXT_FLAGS=
++#@MK@GITNUMTMP=$(shell cd "$(top_srcdir)"; echo $$(git describe --tags|sed -r 's|v?(.+)|\1|'|sed 's|-|+|g'); cd - > /dev/null )
++@MK@GITNUMTMP=$(shell cd "$(top_srcdir)"; A=$$(git show | head -n 1 | awk '{print $$2}'); echo $${A:0:7}; cd - > /dev/null )
++#@MK@SVNNUMTMP=$(shell cd "$(top_srcdir)"; LC_ALL=C svn info | grep -i Revision | awk '{print $$2}'; cd - > /dev/null )
++#@MK@ifeq ($(SVNNUMTMP),)
++#EXT_FLAGS+= -DSVN_VERSION='"${GITNUMTMP}"'
++#@MK@else
++#EXT_FLAGS+= -DSVN_VERSION='"${SVNNUMTMP}"'
++#@MK@endif
++@MK@ifeq ($(GITNUMTMP),)
++@MK@else
++EXT_FLAGS+= -DSVN_VERSION='"${GITNUMTMP}"'
++@MK@endif
++DEFS+=$(EXT_FLAGS)
++
++
+diff -Nru hustoj-r3120.58b04b80/trunk/core/judged/judged.cc hustoj-r3120.58b04b80-changed/trunk/core/judged/judged.cc
+--- hustoj-r3120.58b04b80/trunk/core/judged/judged.cc	2017-11-09 07:40:33.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/judged/judged.cc	2017-11-11 16:24:47.401641934 -0500
+@@ -80,7 +80,10 @@
+ 
+ 
+ static bool STOP = false;
+-static int DEBUG = 0;
++#ifndef DEBUG
++#define DEBUG 0
++#endif
++static int DEBUG1 = 0;
+ static int ONCE = 0;
+ #ifdef _mysql_h
+ static MYSQL *conn;
+@@ -605,7 +608,7 @@
+ 
+ }
+ int main(int argc, char** argv) {
+-	DEBUG = (argc > 2);
++	DEBUG1 = (argc > 2);
+ 	ONCE = (argc > 3);
+ 	if (argc > 1)
+ 		strcpy(oj_home, argv[1]);
+diff -Nru hustoj-r3120.58b04b80/trunk/core/judged/Makefile.am hustoj-r3120.58b04b80-changed/trunk/core/judged/Makefile.am
+--- hustoj-r3120.58b04b80/trunk/core/judged/Makefile.am	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/judged/Makefile.am	2017-11-11 14:41:06.104220392 -0500
+@@ -0,0 +1,62 @@
++
++AM_LDFLAGS=
++AM_CFLAGS=
++AM_CPPFLAGS=
++EXTRA_DIST=
++
++if DEBUG
++# use "valgrind --tool=memcheck --leak-check=yes" to check memory leak, MemWatch will drag the program.
++DEFS+=-DDEBUG=1
++AM_CFLAGS+=-g  # -Werror -Wno-initializer-overrides # -Wall
++
++else
++AM_CFLAGS+=-O3 # -Werror -Wno-initializer-overrides # -Wall
++endif
++
++AM_CFLAGS+= \
++    -I$(top_srcdir)/src/ \
++    -I$(top_srcdir)/include/ \
++    -I$(top_builddir)/include/ \
++    $(NULL)
++
++AM_CPPFLAGS+= $(AM_CFLAGS)
++
++AM_LDFLAGS += \
++    $(NULL)
++
++DEFS+= \
++    `getconf LFS_CFLAGS` \
++    `getconf LFS64_CFLAGS` \
++    -D_GNU_SOURCE \
++    -D_FILE_OFFSET_BITS=64 \
++    -DHAVE_MMAP64=1 \
++    $(NULL)
++
++DOCUMENT_FOLDER         ?= $(datadir)/doc/@PACKAGE@/
++
++#TESTS=judged
++bin_PROGRAMS=judged
++
++judged_SOURCES= \
++    judged.cc \
++    $(NULL)
++judged_LDADD = -lmysqlclient
++judged_CFLAGS = $(AM_CFLAGS)
++judged_LDFLAGS = $(AM_LDFLAGS)
++
++EXT_FLAGS=
++#@MK@GITNUMTMP=$(shell cd "$(top_srcdir)"; echo $$(git describe --tags|sed -r 's|v?(.+)|\1|'|sed 's|-|+|g'); cd - > /dev/null )
++@MK@GITNUMTMP=$(shell cd "$(top_srcdir)"; A=$$(git show | head -n 1 | awk '{print $$2}'); echo $${A:0:7}; cd - > /dev/null )
++#@MK@SVNNUMTMP=$(shell cd "$(top_srcdir)"; LC_ALL=C svn info | grep -i Revision | awk '{print $$2}'; cd - > /dev/null )
++#@MK@ifeq ($(SVNNUMTMP),)
++#EXT_FLAGS+= -DSVN_VERSION='"${GITNUMTMP}"'
++#@MK@else
++#EXT_FLAGS+= -DSVN_VERSION='"${SVNNUMTMP}"'
++#@MK@endif
++@MK@ifeq ($(GITNUMTMP),)
++@MK@else
++EXT_FLAGS+= -DSVN_VERSION='"${GITNUMTMP}"'
++@MK@endif
++DEFS+=$(EXT_FLAGS)
++
++
+diff -Nru hustoj-r3120.58b04b80/trunk/core/Makefile.am hustoj-r3120.58b04b80-changed/trunk/core/Makefile.am
+--- hustoj-r3120.58b04b80/trunk/core/Makefile.am	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/Makefile.am	2017-11-11 14:38:04.522543594 -0500
+@@ -0,0 +1,38 @@
++SUBDIRS= judge_client judged sim/sim_2_77
++
++EXTRA_DIST=autogen.sh autoclean.sh AUTHORS README.md ChangeLog \
++    $(DOC_FILES) \
++    $(NULL)
++
++ChangeLog: .git
++	if test -d $(srcdir)/.git; then                         \
++	  if test -f $(srcdir)/.last-cl-gen; then               \
++        git log --no-merges --date-order --date=short       \
++          $$(cat $(srcdir)/.last-cl-gen)..                  \
++          | sed -e  '/^commit.*$$/d'                        \
++          | awk '/^Author/ {sub(/\\$$/,""); getline t; print $$0 t; next}; 1' \
++          | sed -e 's/^Author: //g'                         \
++          | sed -e 's/>Date:   \([0-9]*-[0-9]*-[0-9]*\)/>\t\1/g' \
++          | sed -e 's/^\(.*\) \(\)\t\(.*\)/\3    \1    \2/g' \
++          > ChangeLog.tmp;                                  \
++      else                                                  \
++        git log --no-merges --date-order --date=short       \
++          | sed -e  '/^commit.*$$/d'                        \
++          | awk '/^Author/ {sub(/\\$$/,""); getline t; print $$0 t; next}; 1' \
++          | sed -e 's/^Author: //g'                         \
++          | sed -e 's/>Date:   \([0-9]*-[0-9]*-[0-9]*\)/>\t\1/g' \
++          | sed -e 's/^\(.*\) \(\)\t\(.*\)/\3    \1    \2/g' \
++          > ChangeLog.tmp;                                  \
++      fi;                                                   \
++	  touch ChangeLog                                       \
++	    && git rev-list -n 1 HEAD >.last-cl-gen.tmp         \
++        && (echo; cat $(srcdir)/ChangeLog) >>ChangeLog.tmp  \
++        && mv -f ChangeLog.tmp $(srcdir)/ChangeLog          \
++        && mv -f .last-cl-gen.tmp $(srcdir)/.last-cl-gen    \
++        && rm -f ChangeLog.tmp;                             \
++    fi
++	if test -d $(srcdir)/.hg; then                          \
++        hg log --template changelog > ChangeLog;            \
++        touch $(srcdir)/.last-cl-gen;                       \
++    fi
++
+diff -Nru hustoj-r3120.58b04b80/trunk/core/sim/sim_2_77/Makefile.am hustoj-r3120.58b04b80-changed/trunk/core/sim/sim_2_77/Makefile.am
+--- hustoj-r3120.58b04b80/trunk/core/sim/sim_2_77/Makefile.am	1969-12-31 19:00:00.000000000 -0500
++++ hustoj-r3120.58b04b80-changed/trunk/core/sim/sim_2_77/Makefile.am	2017-11-11 16:32:42.495664356 -0500
+@@ -0,0 +1,148 @@
++
++AM_LDFLAGS=
++AM_CFLAGS=
++AM_CPPFLAGS=
++EXTRA_DIST=
++
++if DEBUG
++# use "valgrind --tool=memcheck --leak-check=yes" to check memory leak, MemWatch will drag the program.
++DEFS+=-DDEBUG=1
++AM_CFLAGS+=-g  # -Werror -Wno-initializer-overrides # -Wall
++
++else
++AM_CFLAGS+=-O3 # -Werror -Wno-initializer-overrides # -Wall
++endif
++
++AM_CFLAGS+= \
++    -I$(top_srcdir)/src/ \
++    -I$(top_srcdir)/include/ \
++    -I$(top_builddir)/include/ \
++    $(NULL)
++
++AM_CPPFLAGS+= $(AM_CFLAGS)
++
++AM_LDFLAGS += \
++    $(NULL)
++
++DEFS+= \
++    `getconf LFS_CFLAGS` \
++    `getconf LFS64_CFLAGS` \
++    -D_GNU_SOURCE \
++    -D_FILE_OFFSET_BITS=64 \
++    -DHAVE_MMAP64=1 \
++    $(NULL)
++
++#DOCUMENT_FOLDER         ?= $(datadir)/doc/@PACKAGE@/
++
++
++BUILT_SOURCES = \
++    $(top_builddir)/sim/sim_2_77/clang.c \
++    $(top_builddir)/sim/sim_2_77/javalang.c \
++    $(top_builddir)/sim/sim_2_77/pascallang.c \
++    $(top_builddir)/sim/sim_2_77/m2lang.c \
++    $(top_builddir)/sim/sim_2_77/lisplang.c \
++    $(top_builddir)/sim/sim_2_77/miralang.c \
++    $(top_builddir)/sim/sim_2_77/textlang.c \
++    $(NULL)
++
++CLEANFILES = $(BUILT_SOURCES)
++nodist_program_SOURCES = $(BUILT_SOURCES)
++$(top_builddir)/sim/sim_2_77/clang.c:      $(top_srcdir)/sim/sim_2_77/clang.l
++	$(LEX) -o $@ $<
++$(top_builddir)/sim/sim_2_77/javalang.c:   $(top_srcdir)/sim/sim_2_77/javalang.l
++	$(LEX) -o $@ $<
++$(top_builddir)/sim/sim_2_77/pascallang.c: $(top_srcdir)/sim/sim_2_77/pascallang.l
++	$(LEX) -o $@ $<
++$(top_builddir)/sim/sim_2_77/m2lang.c:     $(top_srcdir)/sim/sim_2_77/m2lang.l
++	$(LEX) -o $@ $<
++$(top_builddir)/sim/sim_2_77/lisplang.c:   $(top_srcdir)/sim/sim_2_77/lisplang.l
++	$(LEX) -o $@ $<
++$(top_builddir)/sim/sim_2_77/miralang.c:   $(top_srcdir)/sim/sim_2_77/miralang.l
++	$(LEX) -o $@ $<
++$(top_builddir)/sim/sim_2_77/textlang.c:   $(top_srcdir)/sim/sim_2_77/textlang.l
++	$(LEX) -o $@ $<
++
++# Common modules:
++COM_CFS =	token.c lex.c stream.c text.c tokenarray.c error.c $(DEBUG_C) \
++		ForEachFile.c fname.c Malloc.c any_int.c
++# The idf module:
++IDF_CFS =	idf.c
++# The runs package:
++RUNS_CFS =	runs.c percentages.c
++# The main program:
++MAIN_CFS =	sim.c options.c newargs.c hash.c compare.c add_run.c \
++		pass1.c pass2.c pass3.c
++# The similarity tester without the language part:
++SIM_CFS =	$(COM_CFS) $(IDF_CFS) $(RUNS_CFS) $(MAIN_CFS)
++
++# The algollike module:
++ALG_CFS =	algollike.c
++
++# The C Language module:					# C
++CLANG_CFS =	$(top_builddir)/sim/sim_2_77/clang.c
++
++# The Java Language module:					# Java
++JAVALANG_CFS =	$(top_builddir)/sim/sim_2_77/javalang.c
++
++# The Pascal Language module:					# Pascal
++PASCLANG_CFS =	$(top_builddir)/sim/sim_2_77/pascallang.c
++
++# The Modula-2 Language module:					# Modula-2
++M2LANG_CFS =	$(top_builddir)/sim/sim_2_77/m2lang.c
++
++# The Lisp Language module:					# Lisp
++LISPLANG_CFS =	$(top_builddir)/sim/sim_2_77/lisplang.c
++
++# The Miranda Language module:					# Miranda
++MIRALANG_CFS =	$(top_builddir)/sim/sim_2_77/miralang.c
++
++# The Text module:						# Text
++TEXTLANG_CFS =	$(top_builddir)/sim/sim_2_77/textlang.c
++
++#TESTS=judged
++bin_PROGRAMS=sim_c sim_java sim_pasc sim_m2 sim_lisp sim_mira sim_text
++
++sim_c_SOURCES= \
++    $(SIM_CFS) $(ALG_CFS) $(CLANG_CFS) \
++    $(NULL)
++
++sim_java_SOURCES= \
++    $(SIM_CFS) $(ALG_CFS) $(JAVALANG_CFS) \
++    $(NULL)
++
++sim_pasc_SOURCES= \
++    $(SIM_CFS) $(ALG_CFS) $(PASCLANG_CFS) \
++    $(NULL)
++
++sim_m2_SOURCES= \
++    $(SIM_CFS) $(ALG_CFS) $(M2LANG_CFS) \
++    $(NULL)
++
++sim_lisp_SOURCES= \
++    $(SIM_CFS) $(ALG_CFS) $(LISPLANG_CFS) \
++    $(NULL)
++
++sim_mira_SOURCES= \
++    $(SIM_CFS) $(ALG_CFS) $(MIRALANG_CFS) \
++    $(NULL)
++
++sim_text_SOURCES= \
++    $(SIM_CFS) $(TEXTLANG_CFS) \
++    $(NULL)
++
++EXT_FLAGS=
++#@MK@GITNUMTMP=$(shell cd "$(top_srcdir)"; echo $$(git describe --tags|sed -r 's|v?(.+)|\1|'|sed 's|-|+|g'); cd - > /dev/null )
++@MK@GITNUMTMP=$(shell cd "$(top_srcdir)"; A=$$(git show | head -n 1 | awk '{print $$2}'); echo $${A:0:7}; cd - > /dev/null )
++#@MK@SVNNUMTMP=$(shell cd "$(top_srcdir)"; LC_ALL=C svn info | grep -i Revision | awk '{print $$2}'; cd - > /dev/null )
++#@MK@ifeq ($(SVNNUMTMP),)
++#EXT_FLAGS+= -DSVN_VERSION='"${GITNUMTMP}"'
++#@MK@else
++#EXT_FLAGS+= -DSVN_VERSION='"${SVNNUMTMP}"'
++#@MK@endif
++@MK@ifeq ($(GITNUMTMP),)
++@MK@else
++EXT_FLAGS+= -DSVN_VERSION='"${GITNUMTMP}"'
++@MK@endif
++DEFS+=$(EXT_FLAGS)
++
++
