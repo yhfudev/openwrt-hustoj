@@ -40,7 +40,7 @@ define Package/hustoj
   SUBMENU:=Web Servers/Proxies
   TITLE:=hustoj for web server
   URL:=https://github.com/zhblue/hustoj.git
-  DEPENDS:= +libstdcpp +libmysqlclient
+  DEPENDS:= +libstdcpp +libmysqlclient +php7-mod-simplexml
   MENU:=0
 
   MAKE_PATH=trunk/core
